@@ -14,6 +14,9 @@ import retrofit2.converter.scalars.ScalarsConverterFactory;
 
 import org.json.simple.*;
 import org.json.simple.parser.JSONParser;
+//import org.json.simple.JSONArray;
+//import org.json.simple.JSONObject;
+
 
 public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
     private WebSocket mConn = null;
@@ -22,6 +25,8 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
     private TestAPI mATGService;
     private ATGReportMessage mReportMessage = new ATGReportMessage();
     private ArrayList<Evaluator> mEvaluators;
+    private Message mMsg = new Message(); // update
+   // private GpsService mGPSSvc; // update
 
     /**
      * 
@@ -54,7 +59,6 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 System.out.printf("msg from rsu: %s", message);
 
                 Call<String> c = mATGService.report("{\"greet\":\"hello world!\"}");
-
                 // send message to ATG
                 c.enqueue(new Callback<String>() {
                     // response from ATG
@@ -72,21 +76,28 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                         //System.out.println("got error");
                     }
                 });
-
+                /* ????????
                 if (true) {
                     return;
                 }
-
+                */
                 // System.out.println("rcv msg");
 
-                Object json = new JSONParser().parse(message);
+                int len = message.length();
+                Object json =  new JSONParser().parse(message.substring(1, len)); // 어떤 유형의 사고타입인지 모르는 사고정보 메시지 파싱작업?
+
                 if (!(json instanceof JSONArray)) {
                     throw new Exception("Expected the message must be JSON array");
                 }
                 JSONArray data = (JSONArray) json;
                 HashMap<String, Double> abnormals = new HashMap<String, Double>();
+                
+                String carNum = data.get(data.size()-1).toString(); // update               
 
-                for (int i = 0; i < data.size(); i++) {
+                mMsg.resolve(); // update
+
+
+                for (int i = 0; i < data.size(); i++) {  // update "data.size()-1"
                     Evaluator evaluator = mEvaluators.get(i);
                     if (evaluator == null) {
                         continue;
@@ -113,10 +124,13 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                         continue;
                     }
 
+                    mMsg.addData(new Message.Data(evaluator.type()).addValue(evaluator.name(), sample.toString())); // update
+
                     abnormals.put(evaluator.name(), sample);
-                    mReportMessage.addStatus(evaluator.type());
+                    mReportMessage.addStatus(evaluator.type().toString()); // update, ".toString() 추가"
                 }
-                System.out.println(abnormals.toString());
+                System.out.println("abnormals.toString()");
+                System.out.println(abnormals.toString());  
 
                 // there is no abnormal state
                 // so, it is not needed to send report the server.
@@ -125,14 +139,32 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                     mConn.sendText("o");
                     return;
                 }
+               
 
-                // System.out.println("abnormal!");
+                  
+
+                // TODO: send alert to obu.
+                // n[{Abnormal information}]
+                // need to discuss how to format {Abnormal information}.
+                //
+                // mConn.sendText(abnormals.to???l!");
 
                 // TODO: send alert to obu.
                 // n[{Abnormal information}]
                 // need to discuss how to format {Abnormal information}.
                 //
                 // mConn.sendText(abnormals.to???
+
+
+                Message rst = mMsg.setType(Message.MsgType.abnormal).setTimeToNow().clone(); // update
+               
+                //Message rst = mMsg.setType(Message.MsgType.abnormal).setTimeToNow()
+                //.setGPS(mGPSSvc.getLatitude(), mGPSSvc.getLongitude()).clone();
+
+                System.out.println("rst.toString()");
+                System.out.printf("%s", rst.toString()); // update
+
+
 
                 mReportMessage.setTimeToNow().incSeq();
                 for (Map.Entry<String, Double> abnormal : abnormals.entrySet()) {
@@ -159,6 +191,10 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                     }
                 });
             } // public void onTextMessage() 끝
+
+
+
+
 
             @Override
             public void onDisconnected(WebSocket ws, WebSocketFrame server, WebSocketFrame client,
@@ -217,6 +253,10 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
         mStopped = true;
         mConn.disconnect();
     }
+
+
+
+
 
     static private void mSetEvaluators(ArrayList<Evaluator> trg) {
         trg.set(0, new Evaluator("Velocity", AbnormalTypes.Collision) { // [0]속도
@@ -425,4 +465,12 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
             }
         });
     }
+
+
+
+
 }
+
+
+
+
