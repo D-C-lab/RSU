@@ -97,7 +97,7 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 mMsg.resolve(); // update
 
 
-                for (int i = 0; i < data.size(); i++) {  // update "data.size()-1"
+                for (int i = 0; i < data.size()-2; i++) {  // update "data.size()-1"
                     Evaluator evaluator = mEvaluators.get(i);
                     if (evaluator == null) {
                         continue;
@@ -136,7 +136,7 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 // so, it is not needed to send report the server.
                 if (abnormals.isEmpty()) {
                     System.out.println("normal!");
-                    mConn.sendText("o");
+                    mConn.sendText("o["+data.get(data.size()-2).toString()+"]");
                     return;
                 }
                
@@ -155,8 +155,9 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 //
                 // mConn.sendText(abnormals.to???
 
+                int packetNum = Integer.parseInt(data.get(data.size()-2).toString());
 
-                Message rst = mMsg.setType(Message.MsgType.abnormal).setTimeToNow().clone(); // update
+                Message rst = mMsg.setType(Message.MsgType.abnormal).setTimeToNow().setSeq(packetNum).clone(); // update
                
                 //Message rst = mMsg.setType(Message.MsgType.abnormal).setTimeToNow()
                 //.setGPS(mGPSSvc.getLatitude(), mGPSSvc.getLongitude()).clone();
@@ -164,7 +165,7 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 System.out.println("rst.toString()");
                 System.out.printf("%s", rst.toString()); // update
 
-
+                mConn.sendText("a"+rst);
 
                 mReportMessage.setTimeToNow().incSeq();
                 for (Map.Entry<String, Double> abnormal : abnormals.entrySet()) {
