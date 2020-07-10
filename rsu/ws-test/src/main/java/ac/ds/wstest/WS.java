@@ -129,8 +129,6 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                     abnormals.put(evaluator.name(), sample);
                     mReportMessage.addStatus(evaluator.type().toString()); // update, ".toString() 추가"
                 }
-                System.out.println("abnormals.toString()");
-                System.out.println(abnormals.toString());  
 
                 // there is no abnormal state
                 // so, it is not needed to send report the server.
@@ -161,9 +159,6 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                
                 //Message rst = mMsg.setType(Message.MsgType.abnormal).setTimeToNow()
                 //.setGPS(mGPSSvc.getLatitude(), mGPSSvc.getLongitude()).clone();
-
-                System.out.println("rst.toString()");
-                System.out.printf("%s", rst.toString()); // update
 
                 mConn.sendText("a"+rst);
 
