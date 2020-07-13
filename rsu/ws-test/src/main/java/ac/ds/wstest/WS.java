@@ -33,7 +33,7 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
     private ATGReportMessage mReportMessage = new ATGReportMessage();
     private ArrayList<Evaluator> mEvaluators;
     private Message mMsg = new Message(); // update
-    private File file = new File("test1.txt");
+    private File file = new File("./test1.txt");
     private FileWriter writer = null;
 
    // private GpsService mGPSSvc; // update
@@ -150,6 +150,19 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 if (abnormals.isEmpty()) {
                     System.out.println("normal!");
                     mConn.sendText("o["+data.get(data.size()-2).toString()+"]");
+                    try {
+                        writer = new FileWriter(file, true);
+                        writer.write(data.get(data.size()-2).toString()+","+Long.toString(completeTime)+"\n");
+                        writer.flush();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    } finally {
+                        try {
+                            if(writer != null) writer.close();
+                        } catch(IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
                     return;
                 }
                
@@ -173,7 +186,7 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 try {
                     writer = new FileWriter(file, true);
                     writer.write(data.get(data.size()-2).toString()+","+Long.toString(completeTime)+"\n");
-                    writer.flush()
+                    writer.flush();
                 } catch (IOException e) {
                     e.printStackTrace();
                 } finally {
