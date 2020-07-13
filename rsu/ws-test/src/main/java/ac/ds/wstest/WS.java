@@ -173,6 +173,7 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 try {
                     writer = new FileWriter(file, true);
                     writer.write(data.get(data.size()-2).toString()+","+Long.toString(completeTime)+"\n");
+                    writer.flush()
                 } catch (IOException e) {
                     e.printStackTrace();
                 } finally {
