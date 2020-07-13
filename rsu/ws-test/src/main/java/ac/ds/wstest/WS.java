@@ -14,6 +14,13 @@ import retrofit2.converter.scalars.ScalarsConverterFactory;
 
 import org.json.simple.*;
 import org.json.simple.parser.JSONParser;
+import java.time.Instant;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+
+import java.io.IOException;
+
 //import org.json.simple.JSONArray;
 //import org.json.simple.JSONObject;
 
@@ -26,6 +33,9 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
     private ATGReportMessage mReportMessage = new ATGReportMessage();
     private ArrayList<Evaluator> mEvaluators;
     private Message mMsg = new Message(); // update
+    private File file = new File("test1.txt");
+    private FileWriter writer = null;
+
    // private GpsService mGPSSvc; // update
 
     /**
@@ -56,6 +66,8 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
             // message from obu
             @Override
             public void onTextMessage(WebSocket ws, String message) throws Exception {
+                long epochMilli = Instant.now().toEpochMilli();
+
                 System.out.printf("msg from rsu: %s", message);
 
                 Call<String> c = mATGService.report("{\"greet\":\"hello world!\"}");
@@ -96,8 +108,11 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
 
                 mMsg.resolve(); // update
 
+                Object startTImeObject = data.get(data.size()-3);
+                long startTime = (Long) startTImeObject;
+                long completeTime = epochMilli - startTime;
 
-                for (int i = 0; i < data.size()-2; i++) {  // update "data.size()-1"
+                for (int i = 0; i < data.size()-3; i++) {  // update "data.size()-1"
                     Evaluator evaluator = mEvaluators.get(i);
                     if (evaluator == null) {
                         continue;
@@ -154,6 +169,20 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 // mConn.sendText(abnormals.to???
 
                 int packetNum = Integer.parseInt(data.get(data.size()-2).toString());
+
+                try {
+                    writer = new FileWriter(file, true);
+                    writer.write(data.get(data.size()-2).toString()+","+Long.toString(completeTime)+"\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } finally {
+                    try {
+                        if(writer != null) writer.close();
+                    } catch(IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+
 
                 Message rst = mMsg.setType(Message.MsgType.abnormal).setTimeToNow().setSeq(packetNum).clone(); // update
                
