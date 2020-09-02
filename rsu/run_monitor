@@ -1,0 +1,5 @@
+#!/bin/bash
+
+mvn -f ./ws-test/pom3.xml clean package
+
+java -jar ./ws-test/target/ws-test3-1.0-SNAPSHOT.jar

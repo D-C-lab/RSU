@@ -1,0 +1,8 @@
+version: "3"
+services:
+        stress:
+                image: jin4812/stress:0.1
+
+                command: stress -m 100 --timeout 60s
+
+

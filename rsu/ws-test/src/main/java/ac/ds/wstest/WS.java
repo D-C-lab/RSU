@@ -1,8 +1,10 @@
 package ac.ds.wstest;
 
+import java.io.BufferedReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import com.neovisionaries.ws.client.*;
 
@@ -18,6 +20,21 @@ import org.json.simple.parser.JSONParser;
 //import org.json.simple.JSONObject;
 
 
+import java.io.IOException;
+
+import java.net.Socket;
+
+import java.util.UUID;
+
+import javax.swing.text.html.parser.Entity;
+
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+
+import java.util.Timer;
+import java.util.TimerTask;
+
+
 public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
     private WebSocket mConn = null;
     private boolean mStopped = false;
@@ -25,8 +42,17 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
     private TestAPI mATGService;
     private ATGReportMessage mReportMessage = new ATGReportMessage();
     private ArrayList<Evaluator> mEvaluators;
-    private Message mMsg = new Message(); // update
-   // private GpsService mGPSSvc; // update
+    private Message mMsg = new Message();
+   
+    
+    HashMap<String, Boolean> car = new HashMap<String, Boolean>(); // 차량번호 저장.
+    HashMap<String, Long> carTime = new HashMap<String, Long>(); // 차량시간 저장.
+    HashMap<String, String> conResource_C = new HashMap<String, String>(); // 해당 차량의 컨테이너의 cpu 자원 저장
+    HashMap<String, String> conResource_M = new HashMap<String, String>(); // 해당 차량의 컨테이너의 memory 자원 저장
+    
+    //HashMap<String, Container> carToContainer = new HashMap<String, Container>();
+
+    private String carNum;
 
     /**
      * 
@@ -41,160 +67,165 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
         // uncomment following line:
         // mReportMessage.setVihicleInfo(id, lisense);
 
-        this.mEvaluators = new ArrayList<Evaluator>();
-        while (mEvaluators.size() < 55) {
-            mEvaluators.add(null);
-        }
-        mSetEvaluators(this.mEvaluators);
-
-	// Create a web socket and set 5000 milliseconds as a timeout(default)
+   	    // Create a web socket and set 5000 milliseconds as a timeout(default)
         this.mConn = new WebSocketFactory().createSocket(src);
 
-	// Register a listener to receive web socket events
+	    // Register a listener to receive web socket events
         this.mConn.addListener(new WebSocketAdapter() {
-
             // message from obu
-            @Override
+            @Override  // Called when a text message was received
             public void onTextMessage(WebSocket ws, String message) throws Exception {
-                System.out.printf("msg from rsu: %s", message);
 
-                Call<String> c = mATGService.report("{\"greet\":\"hello world!\"}");
-                // send message to ATG
-                c.enqueue(new Callback<String>() {
-                    // response from ATG
-                    @Override
-                    public void onResponse(Call<String> call, Response<String> res) {
-                        // TODO: ATG: handle response
 
-                        if (res.body() == null) {
-                            return;
-                        }
-                    }
+                System.out.printf("\ndata recv fr car: %s\n", message);
 
-                    @Override
-                    public void onFailure(Call<String> call, Throwable t) {
-                        //System.out.println("got error");
-                    }
-                });
-                /* ????????
-                if (true) {
-                    return;
-                }
-                */
-                // System.out.println("rcv msg");
-
-                int len = message.length();
-                Object json =  new JSONParser().parse(message.substring(1, len)); // 어떤 유형의 사고타입인지 모르는 사고정보 메시지 파싱작업?
+                // 메시지에 포함되어있는 차량 번호 파악.
+                int len = message.length(); // update
+                Object json =  new JSONParser().parse(message.substring(1, len)); // 메시지 맨 앞에 'r'이 붙어있으므로 그 다음 단어부터 파싱.
 
                 if (!(json instanceof JSONArray)) {
-                    throw new Exception("Expected the message must be JSON array");
+                throw new Exception("Expected the message must be JSON array");
                 }
                 JSONArray data = (JSONArray) json;
-                HashMap<String, Double> abnormals = new HashMap<String, Double>();
+               
+                carNum = data.get(data.size()-1).toString();
                 
-                String carNum = data.get(data.size()-1).toString(); // update               
 
-                mMsg.resolve(); // update
+                
+                // 차량번호의 저장유무에 따라 컨테이너 생성
+                if(car.get(carNum) == null) { // RSU에 처음 접근한 차량                
 
+                    car.put(carNum, true);
+                    carTime.put(carNum, System.currentTimeMillis()); // RSU로 차량이 처음 데이터를 보냈을 때의 현 시간.
+                    conResource_C.put(carNum, "1024"); // CpuShare default value: 1024
+                    conResource_M.put(carNum, "256"); // Memory default value: 256MB
 
-                for (int i = 0; i < data.size(); i++) {  // update "data.size()-1"
-                    Evaluator evaluator = mEvaluators.get(i);
-                    if (evaluator == null) {
-                        continue;
-                    }
+                    Process p_run = Runtime.getRuntime().exec(String.format("docker run -itd -e CAR_NUM=%s --network=host --name rsu-server%s rsu", carNum, carNum));
+                    p_run.waitFor();  
 
-                    Double sample;
-                    Object val = data.get(i);
-                    if (val instanceof Double) {
-                        sample = (Double) val;
-                    } else if (val instanceof Integer) {
-                        sample = new Double((Integer) val);
-                    } else if (val instanceof String) {
-                        continue;
-                    } else if (val instanceof Float) {
-                        sample = new Double((Float) val);
-                    } else if (val instanceof Long) {
-                        sample = new Double((Long) val);
-                    } else {
-                        continue;
-                    }
+                    Process p_setC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 1024 rsu-server%s", carNum)); 
+                    p_setC.waitFor();
+                    p_setC.destroy();
 
-                    boolean isAbnormal = evaluator.eval(sample);
-                    if (!isAbnormal) {
-                        continue;
-                    }
+                    Process p_setM = Runtime.getRuntime().exec(String.format("docker update --memory=256m rsu-server%s", carNum)); 
+                    p_setM.waitFor();
+                    p_setM.destroy();
 
-                    mMsg.addData(new Message.Data(evaluator.type()).addValue(evaluator.name(), sample.toString())); // update
+                    try {
+                        // Rmi registry에 서버 IP, port를 설정한다.
+                        //Registry registry = LocateRegistry.getRegistry("localhost",2000);
+                        Registry registry = LocateRegistry.getRegistry(2000);
 
-                    abnormals.put(evaluator.name(), sample);
-                    mReportMessage.addStatus(evaluator.type().toString()); // update, ".toString() 추가"
-                }
-                System.out.println("abnormals.toString()");
-                System.out.println(abnormals.toString());  
+                        //InterfaceRMI stub = (InterfaceRMI) registry.lookup("rsuserver");
+                        InterfaceRMI stub = (InterfaceRMI) registry.lookup(String.format("rsuserver%s", carNum));                      
+                        String Evalmsg = stub.ServerContainer(message);  // server의 함수를 호출한다.
+                        System.out.println("Evalmsg: " + Evalmsg);
 
-                // there is no abnormal state
-                // so, it is not needed to send report the server.
-                if (abnormals.isEmpty()) {
-                    System.out.println("normal!");
-                    mConn.sendText("o");
-                    return;
-                }
-               
+                        // 차량의 첫 message의 내용 중 abnormal 상태가 감지되고, CpuShare가 "1024"이고, Memory가 "256MB"이면 자원 더 할당.
+                        if(Evalmsg.charAt(0) == 'a' && conResource_C.get(carNum) == "1024" && conResource_M.get(carNum) == "256")  { 
 
-                  
+                            System.out.printf("carNum: %s --> abnormal data detected\n", carNum);
+                            System.out.printf("carNum: %s --> allocate more cpu resources\n", carNum);
+                            System.out.printf("carNum: %s --> allocate more memory resources\n", carNum);
 
-                // TODO: send alert to obu.
-                // n[{Abnormal information}]
-                // need to discuss how to format {Abnormal information}.
-                //
-                // mConn.sendText(abnormals.to???l!");
+                            Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 2048 rsu-server%s", carNum));
+                            p_upC.waitFor();
+                            p_upC.destroy();
+                            
+                            Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=512m rsu-server%s", carNum));
+                            p_upM.waitFor();
+                            p_upM.destroy();
 
-                // TODO: send alert to obu.
-                // n[{Abnormal information}]
-                // need to discuss how to format {Abnormal information}.
-                //
-                // mConn.sendText(abnormals.to???
+                            conResource_C.put(carNum, "2048");
+                            conResource_M.put(carNum, "512");
+                            System.out.printf("carNum: %s --> changed container-cpuShare: 1024 to %s\n", carNum, conResource_C.get(carNum));
+                            System.out.printf("carNum: %s --> changed container-memory: 256MB to %sMB\n", carNum, conResource_M.get(carNum));
+                        }                                           
 
+                        mConn.sendText(Evalmsg);       
 
-                Message rst = mMsg.setType(Message.MsgType.abnormal).setTimeToNow().clone(); // update
-               
-                //Message rst = mMsg.setType(Message.MsgType.abnormal).setTimeToNow()
-                //.setGPS(mGPSSvc.getLatitude(), mGPSSvc.getLongitude()).clone();
+                    } catch (Exception e) {
+                        //System.out.println("Client exception: " + e.toString());
+                        //e.printStackTrace();
+                        TryRmiUntilConnected(message);
+                    }           
 
-                System.out.println("rst.toString()");
-                System.out.printf("%s", rst.toString()); // update
-
-
-
-                mReportMessage.setTimeToNow().incSeq();
-                for (Map.Entry<String, Double> abnormal : abnormals.entrySet()) {
-                    mReportMessage.addData(abnormal.getKey(), "", abnormal.getValue());
+                    p_run.destroy();
                 }
 
-                Call<String> call = mATGService.report(mReportMessage.toString());
+                else if(car.get(carNum)) { // 차량번호가 이미 저장되어있음
 
-                // send message to ATG  비동기적 호출
-                call.enqueue(new Callback<String>() {
-                    // response from ATG
-                    @Override
-                    public void onResponse(Call<String> call, Response<String> res) {
-                        // TODO: ATG: handle response
+                    System.out.println("already carNum exists");
 
-                        if (res.body() == null) {
-                            return;
+                    carTime.put(carNum, System.currentTimeMillis());
+                    // Long current_time = System.currentTimeMillis();
+                    // con.set_Time(current_time);
+                    // carToContainer.put(carNum, con);
+                    
+                    try {
+                        // Rmi registry에 서버 IP, port를 설정한다.
+                        Registry registry = LocateRegistry.getRegistry("localhost",2000);
+
+                        //InterfaceRMI stub = (InterfaceRMI) registry.lookup("rsuserver");
+                        InterfaceRMI stub = (InterfaceRMI) registry.lookup(String.format("rsuserver%s",carNum));
+                        String Evalmsg = stub.ServerContainer(message); // server의 함수를 호출한다.                                        
+                        System.out.println("Evalmsg : " + Evalmsg);
+
+                        // 차량의 message의 내용 중 abnormal 상태가 감지되고, CpuShare가 "1024"이고, Memory가 "256MB"이면 자원 더 할당.
+                        if(Evalmsg.charAt(0) == 'a' && conResource_C.get(carNum) == "1024" && conResource_M.get(carNum) == "256")  { 
+
+                            System.out.printf("carNum: %s --> abnormal data detected\n", carNum);
+                            System.out.printf("carNum: %s --> allocate more cpu resources\n", carNum);
+                            System.out.printf("carNum: %s --> allocate more memory resources\n", carNum);
+
+                            Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 2048 rsu-server%s", carNum));
+                            p_upC.waitFor();
+                            p_upC.destroy();
+                            
+                            Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=512m rsu-server%s", carNum));
+                            p_upM.waitFor();
+                            p_upM.destroy();                           
+                          
+                            conResource_C.put(carNum, "2048");
+                            conResource_M.put(carNum, "512");
+                            System.out.printf("carNum: %s --> changed container-cpuShare: 1024 to %s\n", carNum, conResource_C.get(carNum));
+                            System.out.printf("carNum: %s --> changed container-memory: 256MB to %sMB\n", carNum, conResource_M.get(carNum));
+                        }    
+                        
+                        // 차량의 message의 내용 중 normal 상태가 감지되고, CpuShare가 "2048"이고, Memory가 "512MB"이면 자원 원상태로 할당.
+                        else if(Evalmsg.charAt(0) == 'o' && conResource_C.get(carNum) == "2048" && conResource_M.get(carNum) == "512") {
+                            
+                            System.out.printf("carNum: %s --> normal data detected\n", carNum);
+                            System.out.printf("carNum: %s --> free allocated cpu resources\n", carNum);
+                            System.out.printf("carNum: %s --> free allocated memory resources\n", carNum);
+                            
+                            Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 1024 rsu-server%s", carNum));
+                            p_upC.waitFor();
+                            p_upC.destroy();
+
+                            Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=256m rsu-server%s", carNum));
+                            p_upM.waitFor();
+                            p_upM.destroy();     
+
+                            conResource_C.put(carNum, "1024");
+                            conResource_M.put(carNum, "256");
+                            System.out.printf("carNum: %s --> changed container-cpuShare: 2048 to %s\n", carNum, conResource_C.get(carNum));
+                            System.out.printf("carNum: %s --> changed container-memory: 512MB to %sMB\n", carNum, conResource_M.get(carNum));
                         }
-                    }
 
-                    @Override
-                    public void onFailure(Call<String> call, Throwable t) {
-                        System.out.println("got error");
-                    }
-                });
+
+                        mConn.sendText(Evalmsg);       
+                    } catch (Exception e) {
+                        //System.out.println("Client exception: " + e.toString());
+                        //e.printStackTrace();
+                        TryRmiUntilConnected(message);
+                    }  
+
+                    
+                }
+                
+
             } // public void onTextMessage() 끝
-
-
-
-
 
             @Override
             public void onDisconnected(WebSocket ws, WebSocketFrame server, WebSocketFrame client,
@@ -215,8 +246,46 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
 
         }); // this.mConn.addListener() 끝
 
-        mRequester = new Retrofit.Builder().baseUrl(dst).addConverterFactory(ScalarsConverterFactory.create()).build();
-        mATGService = mRequester.create(TestAPI.class);
+
+        // RSU가 같은 차량으로부터 10초 안에 데이터를 받지 못하면, 해당 컨테이너 제거.
+        TimerTask ctTimer = new TimerTask() {
+            public void run() {
+                try {
+                    if(car.containsValue(true)){
+                        
+                        for(Entry<String, Long> entry : carTime.entrySet())
+                        {
+                            if((System.currentTimeMillis() - carTime.get(entry.getKey())) / 1000 > 10){ // 10초
+                                
+                                System.out.printf("\n");    
+                                System.out.println("remove container after timeout --> carNum: " + entry.getKey());
+                                System.out.printf("\n"); 
+
+                                Process p_stop = Runtime.getRuntime().exec(String.format("docker stop rsu-server%s", entry.getKey()));
+                                p_stop.waitFor();
+                                p_stop.destroy();
+                                                
+                                Process p_rm = Runtime.getRuntime().exec(String.format("docker rm rsu-server%s", entry.getKey()));
+                                p_rm.waitFor();
+                                p_rm.destroy();
+                    
+                                car.remove(entry.getKey());
+                                carTime.remove(entry.getKey());
+                                conResource_C.remove(entry.getKey());
+                               
+                            }  
+                        }                       
+                    }
+                } catch (Exception e) {
+                                        
+                }
+                
+            }
+        };
+
+        Timer timer = new Timer();
+        timer.schedule(ctTimer, 0, 1000); // 1초마다 차량의 시간 체크.        
+
     } // 생성자 끝
 
 
@@ -255,222 +324,69 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
     }
 
 
+    public void TryRmiUntilConnected(String message) throws Exception{
+        try {
+
+            Registry registry = LocateRegistry.getRegistry("localhost",2000);
+
+            //InterfaceRMI stub = (InterfaceRMI) registry.lookup("rsuserver");
+            InterfaceRMI stub = (InterfaceRMI) registry.lookup(String.format("rsuserver%s",carNum));
+    
+            String Evalmsg = stub.ServerContainer(message);
+                     
+            System.out.println("Evalmsg: " + Evalmsg);       
 
 
+            // 차량의 message의 내용 중 abnormal 상태가 감지되고, CpuShare가 "1024"이고, Memory가 "256MB"이면 자원 더 할당.
+            if(Evalmsg.charAt(0) == 'a' && conResource_C.get(carNum) == "1024" && conResource_M.get(carNum) == "256")  { 
+                
+                System.out.printf("carNum: %s --> abnormal data detected\n", carNum);
+                System.out.printf("carNum: %s --> allocate more cpu resources\n", carNum);
+                System.out.printf("carNum: %s --> allocate more memory resources\n", carNum);
 
-    static private void mSetEvaluators(ArrayList<Evaluator> trg) {
-        trg.set(0, new Evaluator("Velocity", AbnormalTypes.Collision) { // [0]속도
-            Double prev = new Double(-1);
+                Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 2048 rsu-server%s", carNum));
+                p_upC.waitFor();
+                p_upC.destroy();
+                            
+                Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=512m rsu-server%s", carNum));
+                p_upM.waitFor();
+                p_upM.destroy();                           
+                          
+                conResource_C.put(carNum, "2048");
+                conResource_M.put(carNum, "512");
+                System.out.printf("carNum: %s --> changed container-cpuShare: 1024 to %s\n", carNum, conResource_C.get(carNum));
+                System.out.printf("carNum: %s --> changed container-memory: 256MB to %sMB\n", carNum, conResource_M.get(carNum));
+            }    
+                        
+            // 차량의 message의 내용 중 normal 상태가 감지되고, CpuShare가 "2048"이고, Memory가 "512MB"이면 자원 원상태로 할당.
+            else if(Evalmsg.charAt(0) == 'o' && conResource_C.get(carNum) == "2048" && conResource_M.get(carNum) == "512") {
+                                            
+                System.out.printf("carNum: %s --> normal data detected\n", carNum);
+                System.out.printf("carNum: %s --> free allocated cpu resources\n", carNum);
+                System.out.printf("carNum: %s --> free allocated memory resources\n", carNum);
+                            
+                Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 1024 rsu-server%s", carNum));
+                p_upC.waitFor();
+                p_upC.destroy();
 
-            @Override
-            public boolean eval(Double val) {
-                if (prev < -1) {
-                    prev = val;
-                    return false;
-                }
+                Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=256m rsu-server%s", carNum));
+                p_upM.waitFor();
+                p_upM.destroy();     
 
-                Double rst = Math.abs(val - prev);
-                return rst > 8;
+                conResource_C.put(carNum, "1024");
+                conResource_M.put(carNum, "256");
+                System.out.printf("carNum: %s --> changed container-cpuShare: 2048 to %s\n", carNum, conResource_C.get(carNum));
+                System.out.printf("carNum: %s --> changed container-memory: 512MB to %sMB\n", carNum, conResource_M.get(carNum));
             }
-        });
-        trg.set(9, new Evaluator("Gx", AbnormalTypes.Overturn) { // [9]가속도g(x)
-            @Override
-            public boolean eval(Double val) {
 
-                if (val >= -10.0 && val <= 10) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(10, new Evaluator("Gy", AbnormalTypes.Overturn) { // [10]가속도g(y)
-            @Override
-            public boolean eval(Double val) {
 
-                if (val >= -10.0 && val <= 10) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(11, new Evaluator("Gz", AbnormalTypes.Overturn) { // [11]가속도g(z)
-            @Override
-            public boolean eval(Double val) {
-
-                if (val >= -10.0 && val <= 10) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(12, new Evaluator("Gc", AbnormalTypes.Overturn) { // [12]보정 가속도
-            @Override
-            public boolean eval(Double val) {
-
-                if (val >= -1 && val <= 1) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(13, new Evaluator("Catalyst_Temperature", AbnormalTypes.Engine) { // [13]촉매 온도
-            @Override
-            public boolean eval(Double val) {
-
-                if (val >= 200.0 && val <= 550.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(16, new Evaluator("Barometric_Pressure", AbnormalTypes.LowPressure) { // [16]공기압
-            @Override
-            public boolean eval(Double val) {
-                if (val >= 13.6 && val <= 14.8) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(19, new Evaluator("DPF_temperature", AbnormalTypes.Engine) { // [19]배기 가스 온도
-            @Override
-            public boolean eval(Double val) {
-                if (val >= -41.0 && val <= 40.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(21, new Evaluator("Engine_Kw", AbnormalTypes.BatteryDead) { // [21]엔진 전력
-            @Override
-            public boolean eval(Double val) {
-                System.out.println(val);
-                return val == 0.0;
-            }
-        });
-        trg.set(27, new Evaluator("O2_Sensor_1_W", AbnormalTypes.Engine) { // [27]산소 센서 전압
-            @Override
-            public boolean eval(Double val) {
-                if (val >= 0.0 && val <= 1.1) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(35, new Evaluator("O2_Sensor1_E", AbnormalTypes.Engine) { // [35]산소 공기 비율
-            @Override
-            public boolean eval(Double val) {
-                if (val >= 1.0 && val <= 2.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(38, new Evaluator("Relative_Throttle_Position", AbnormalTypes.Engine) { // [38]상대적 스로틀 포지션
-            @Override
-            public boolean eval(Double val) {
-                if (val >= 90.0 && val <= 100.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(40, new Evaluator("Engine_RPM", AbnormalTypes.Engine) { // [40]엔진 RPM
-            @Override
-            public boolean eval(Double val) {
-                if (val >= 0.0 && val <= 2400.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(41, new Evaluator("Engine_Coolant_Temperature", AbnormalTypes.Engine) { // [41]냉각수 온도
-            @Override
-            public boolean eval(Double val) {
-                if (val >= 70.0 && val <= 95.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(43, new Evaluator("Fuel_Rail_Pressure", AbnormalTypes.Engine) { // [43]연료 레일 압력
-            @Override
-            public boolean eval(Double val) {
-                if (val >= 0.0 && val <= 20000.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(47, new Evaluator("Transmission_Temperature", AbnormalTypes.Engine) { // [47]트랜스 미션 온도
-            @Override
-            public boolean eval(Double val) {
-                return !(val >= 70.0 && val <= 120.0);
-            }
-        });
-        trg.set(48, new Evaluator("Intake_Air_Temperature", AbnormalTypes.Engine) { // [48]흡기 공기 온도
-
-            @Override
-            public boolean eval(Double val) {
-
-                if (val >= 23.0 && val <= 70.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(50, new Evaluator("Gas_leakage", AbnormalTypes.GasLeakage) { // [50]가스 유출 감지
-            @Override
-            public boolean eval(Double val) {
-                if (val >= 0.0 && val < 1.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(51, new Evaluator("Car_Temperature", AbnormalTypes.Burning) { // [51]자동차 온도
-            @Override
-            public boolean eval(Double val) {
-
-                if (val >= 0.0 && val <= 94.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
-        trg.set(49, new Evaluator("Rest_Gas", AbnormalTypes.OutOfGas) { // [49]남은 연료
-            @Override
-            public boolean eval(Double val) {
-                if (val >= 0.0 && val < 40.0) {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        });
+            mConn.sendText(Evalmsg); 
+        } catch (Exception e) {
+            //System.out.println("Client exception: " + e.toString());
+            //e.printStackTrace();
+            TryRmiUntilConnected(message);
+        }         
     }
 
 
-
-
 }
-
-
-
-

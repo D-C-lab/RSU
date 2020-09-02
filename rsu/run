@@ -1,0 +1,2 @@
+docker run -it --rm -e ATTACH_HOST=192.168.80.1 -e ATTACH_PORT=8080 -e REMOTE_HOST=192.168.80.32 -e REMOTE_PORT=5122 rsu:latest
+

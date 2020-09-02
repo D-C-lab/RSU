@@ -13,8 +13,6 @@ import org.json.JSONObject;
 public class Message
 {
 
-
-
     // TODO: optimize
     public static class Data {
         private static final String _keyname_desribe = "describing";
@@ -71,10 +69,6 @@ public class Message
 
 
 
-
-
-
-
     public Message() {
         _format = new JSONObject();
         try {
@@ -95,7 +89,7 @@ public class Message
     }
 
     public enum MsgType {
-        normal, abnormal,
+        normal, abnormal
     }
 
     public enum SensorType {
