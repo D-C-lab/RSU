@@ -21,10 +21,16 @@ import org.json.simple.parser.JSONParser;
 
 
 import java.io.IOException;
-
+import java.net.HttpURLConnection;
 import java.net.Socket;
-
+import java.net.URL;
 import java.util.UUID;
+import java.io.BufferedWriter;
+import java.io.OutputStreamWriter;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.DataOutputStream;
+import java.io.*;
 
 import javax.swing.text.html.parser.Entity;
 
@@ -38,13 +44,14 @@ import java.util.TimerTask;
 public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
     private WebSocket mConn = null;
     private boolean mStopped = false;
+    private URL url = null;
+    private HttpURLConnection cloud = null;
     private Retrofit mRequester;
     private TestAPI mATGService;
     private ATGReportMessage mReportMessage = new ATGReportMessage();
     private ArrayList<Evaluator> mEvaluators;
     private Message mMsg = new Message();
-   
-    
+
     HashMap<String, Boolean> car = new HashMap<String, Boolean>(); // 차량번호 저장.
     HashMap<String, Long> carTime = new HashMap<String, Long>(); // 차량시간 저장.
     HashMap<String, String> conResource_C = new HashMap<String, String>(); // 해당 차량의 컨테이너의 cpu 자원 저장
@@ -67,6 +74,9 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
         // uncomment following line:
         // mReportMessage.setVihicleInfo(id, lisense);
 
+        this.url = new URL(dst);
+        this.cloud = (HttpURLConnection) url.openConnection();
+
    	    // Create a web socket and set 5000 milliseconds as a timeout(default)
         this.mConn = new WebSocketFactory().createSocket(src);
 
@@ -80,6 +90,7 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 System.out.printf("\ndata recv fr car: %s\n", message);
 
                 // 메시지에 포함되어있는 차량 번호 파악.
+
                 int len = message.length(); // update
                 Object json =  new JSONParser().parse(message.substring(1, len)); // 메시지 맨 앞에 'r'이 붙어있으므로 그 다음 단어부터 파싱.
 
@@ -89,7 +100,6 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 JSONArray data = (JSONArray) json;
                
                 carNum = data.get(data.size()-1).toString();
-                
 
                 
                 // 차량번호의 저장유무에 따라 컨테이너 생성
@@ -100,16 +110,19 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                     conResource_C.put(carNum, "1024"); // CpuShare default value: 1024
                     conResource_M.put(carNum, "256"); // Memory default value: 256MB
 
-                    Process p_run = Runtime.getRuntime().exec(String.format("docker run -itd -e CAR_NUM=%s --network=host --name rsu-server%s rsu", carNum, carNum));
+                    System.out.printf("\ncreating a container...\n\n");
+
+                    //Process p_run = Runtime.getRuntime().exec(String.format("docker run -itd -e CAR_NUM=%s --network=host --name rsu-server%s rsu", carNum, carNum));
+                    Process p_run = Runtime.getRuntime().exec(String.format("docker run -itd -e CAR_NUM=%s --memory=256m --cpu-shares 1024 --network=host --name container-server rsu", carNum));
                     p_run.waitFor();  
 
-                    Process p_setC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 1024 rsu-server%s", carNum)); 
-                    p_setC.waitFor();
-                    p_setC.destroy();
-
-                    Process p_setM = Runtime.getRuntime().exec(String.format("docker update --memory=256m rsu-server%s", carNum)); 
-                    p_setM.waitFor();
-                    p_setM.destroy();
+//                    Process p_setC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 1024 rsu-server%s", carNum));
+//                    p_setC.waitFor();
+//                    p_setC.destroy();
+//
+//                    Process p_setM = Runtime.getRuntime().exec(String.format("docker update --memory=256m rsu-server%s", carNum));
+//                    p_setM.waitFor();
+//                    p_setM.destroy();
 
                     try {
                         // Rmi registry에 서버 IP, port를 설정한다.
@@ -128,11 +141,11 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                             System.out.printf("carNum: %s --> allocate more cpu resources\n", carNum);
                             System.out.printf("carNum: %s --> allocate more memory resources\n", carNum);
 
-                            Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 2048 rsu-server%s", carNum));
+                            Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 2048 container-server"));
                             p_upC.waitFor();
                             p_upC.destroy();
                             
-                            Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=512m rsu-server%s", carNum));
+                            Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=512m container-server"));
                             p_upM.waitFor();
                             p_upM.destroy();
 
@@ -142,7 +155,9 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                             System.out.printf("carNum: %s --> changed container-memory: 256MB to %sMB\n", carNum, conResource_M.get(carNum));
                         }                                           
 
-                        mConn.sendText(Evalmsg);       
+                        mConn.sendText(Evalmsg);
+
+                        Post_method(Evalmsg);
 
                     } catch (Exception e) {
                         //System.out.println("Client exception: " + e.toString());
@@ -155,16 +170,17 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
 
                 else if(car.get(carNum)) { // 차량번호가 이미 저장되어있음
 
-                    System.out.println("already carNum exists");
+//                    System.out.println("already carNum exists");
 
                     carTime.put(carNum, System.currentTimeMillis());
                     // Long current_time = System.currentTimeMillis();
                     // con.set_Time(current_time);
                     // carToContainer.put(carNum, con);
-                    
-                    try {
+                     
+                    try{
                         // Rmi registry에 서버 IP, port를 설정한다.
-                        Registry registry = LocateRegistry.getRegistry("localhost",2000);
+//                        Registry registry = LocateRegistry.getRegistry("localhost",2000);
+                        Registry registry = LocateRegistry.getRegistry(2000);
 
                         //InterfaceRMI stub = (InterfaceRMI) registry.lookup("rsuserver");
                         InterfaceRMI stub = (InterfaceRMI) registry.lookup(String.format("rsuserver%s",carNum));
@@ -178,14 +194,14 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                             System.out.printf("carNum: %s --> allocate more cpu resources\n", carNum);
                             System.out.printf("carNum: %s --> allocate more memory resources\n", carNum);
 
-                            Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 2048 rsu-server%s", carNum));
+                            Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 2048 container-server"));
                             p_upC.waitFor();
                             p_upC.destroy();
                             
-                            Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=512m rsu-server%s", carNum));
+                            Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=512m container-server"));
                             p_upM.waitFor();
-                            p_upM.destroy();                           
-                          
+                            p_upM.destroy();
+
                             conResource_C.put(carNum, "2048");
                             conResource_M.put(carNum, "512");
                             System.out.printf("carNum: %s --> changed container-cpuShare: 1024 to %s\n", carNum, conResource_C.get(carNum));
@@ -199,11 +215,11 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                             System.out.printf("carNum: %s --> free allocated cpu resources\n", carNum);
                             System.out.printf("carNum: %s --> free allocated memory resources\n", carNum);
                             
-                            Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 1024 rsu-server%s", carNum));
+                            Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 1024 container-server"));
                             p_upC.waitFor();
                             p_upC.destroy();
 
-                            Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=256m rsu-server%s", carNum));
+                            Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=256m container-server"));
                             p_upM.waitFor();
                             p_upM.destroy();     
 
@@ -214,13 +230,15 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                         }
 
 
-                        mConn.sendText(Evalmsg);       
+                        mConn.sendText(Evalmsg);
+
+                        Post_method(Evalmsg);
+
                     } catch (Exception e) {
                         //System.out.println("Client exception: " + e.toString());
                         //e.printStackTrace();
                         TryRmiUntilConnected(message);
-                    }  
-
+                    }
                     
                 }
                 
@@ -246,7 +264,7 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
 
         }); // this.mConn.addListener() 끝
 
-
+    /*
         // RSU가 같은 차량으로부터 10초 안에 데이터를 받지 못하면, 해당 컨테이너 제거.
         TimerTask ctTimer = new TimerTask() {
             public void run() {
@@ -285,7 +303,7 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
 
         Timer timer = new Timer();
         timer.schedule(ctTimer, 0, 1000); // 1초마다 차량의 시간 체크.        
-
+    */
     } // 생성자 끝
 
 
@@ -327,13 +345,11 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
     public void TryRmiUntilConnected(String message) throws Exception{
         try {
 
-            Registry registry = LocateRegistry.getRegistry("localhost",2000);
-
+            //Registry registry = LocateRegistry.getRegistry("localhost",2000);
+            Registry registry = LocateRegistry.getRegistry(2000);
             //InterfaceRMI stub = (InterfaceRMI) registry.lookup("rsuserver");
             InterfaceRMI stub = (InterfaceRMI) registry.lookup(String.format("rsuserver%s",carNum));
-    
             String Evalmsg = stub.ServerContainer(message);
-                     
             System.out.println("Evalmsg: " + Evalmsg);       
 
 
@@ -344,11 +360,11 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 System.out.printf("carNum: %s --> allocate more cpu resources\n", carNum);
                 System.out.printf("carNum: %s --> allocate more memory resources\n", carNum);
 
-                Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 2048 rsu-server%s", carNum));
+                Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 2048 container-server"));
                 p_upC.waitFor();
                 p_upC.destroy();
                             
-                Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=512m rsu-server%s", carNum));
+                Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=512m container-server"));
                 p_upM.waitFor();
                 p_upM.destroy();                           
                           
@@ -365,11 +381,11 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 System.out.printf("carNum: %s --> free allocated cpu resources\n", carNum);
                 System.out.printf("carNum: %s --> free allocated memory resources\n", carNum);
                             
-                Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 1024 rsu-server%s", carNum));
+                Process p_upC = Runtime.getRuntime().exec(String.format("docker update --cpu-shares 1024 container-server"));
                 p_upC.waitFor();
                 p_upC.destroy();
 
-                Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=256m rsu-server%s", carNum));
+                Process p_upM = Runtime.getRuntime().exec(String.format("docker update --memory=256m container-server"));
                 p_upM.waitFor();
                 p_upM.destroy();     
 
@@ -379,8 +395,10 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
                 System.out.printf("carNum: %s --> changed container-memory: 512MB to %sMB\n", carNum, conResource_M.get(carNum));
             }
 
+            mConn.sendText(Evalmsg);
 
-            mConn.sendText(Evalmsg); 
+            Post_method(Evalmsg);
+
         } catch (Exception e) {
             //System.out.println("Client exception: " + e.toString());
             //e.printStackTrace();
@@ -388,5 +406,45 @@ public class WS { // RSU.java: WS ws = new WS(attURL, rmtURL);
         }         
     }
 
+
+
+    public void Post_method(String Evalmsg) throws Exception {
+        try {
+            this.cloud = (HttpURLConnection) url.openConnection();
+
+            int len2 = Evalmsg.length();
+            Object json2 = new JSONParser().parse(Evalmsg.substring(1, len2)); // 메시지 맨 앞에 'r'이 붙어있으므로 그 다음 단어부터 파싱.
+
+            if (!(json2 instanceof JSONObject)) {
+                throw new Exception("Expected the message must be JSON object");
+            }
+            JSONObject data2 = (JSONObject) json2;
+            String Evalmsg2 = data2.toString();
+//            System.out.printf("Evalmsg2: %s\n", Evalmsg2);
+
+//            System.out.println("Previous Request Method : " + this.cloud.getRequestMethod());
+            this.cloud.setRequestMethod("POST");
+            this.cloud.setDoOutput(true);
+
+            this.cloud.setRequestProperty("Content-Type", "application/json");
+
+//            System.out.println("After Request Method : " + this.cloud.getRequestMethod());
+
+            OutputStreamWriter wr = new OutputStreamWriter(this.cloud.getOutputStream());
+            wr.write(Evalmsg2);
+            wr.flush();
+            wr.close();
+
+            BufferedReader in = new BufferedReader(new InputStreamReader(cloud.getInputStream()));
+            String line;
+            while ((line = in.readLine()) != null) {
+                System.out.println(line);
+            }
+            in.close();
+//                        }
+        } catch (Exception e) {
+            //e.printStackTrace();
+        }
+    }
 
 }

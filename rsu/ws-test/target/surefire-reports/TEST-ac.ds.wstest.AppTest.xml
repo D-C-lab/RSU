@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="ac.ds.wstest.AppTest" time="0.027" tests="1" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="ac.ds.wstest.AppTest" time="0.015" tests="1" errors="0" skipped="0" failures="0">
   <properties>
     <property name="sun.desktop" value="gnome"/>
     <property name="awt.toolkit" value="sun.awt.X11.XToolkit"/>
@@ -17,7 +17,7 @@
     <property name="user.country" value="US"/>
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="sun.boot.library.path" value="/usr/local/java/jdk1.8.0_251/jre/lib/amd64"/>
-    <property name="sun.java.command" value="/home/dnclab-jinwon/workspace/RSU/rsu/./ws-test/target/surefire/surefirebooter3018017862467279377.jar /home/dnclab-jinwon/workspace/RSU/rsu/ws-test/target/surefire 2020-09-02T14-53-09_381-jvmRun1 surefire1577361922725953645tmp surefire_07602028706746558649tmp"/>
+    <property name="sun.java.command" value="/home/dnclab-jinwon/workspace/RSU/rsu/./ws-test/target/surefire/surefirebooter1798851869406782860.jar /home/dnclab-jinwon/workspace/RSU/rsu/ws-test/target/surefire 2020-11-23T00-27-29_769-jvmRun1 surefire3513253009069595363tmp surefire_04095011975340589477tmp"/>
     <property name="surefire.test.class.path" value="/home/dnclab-jinwon/workspace/RSU/rsu/./ws-test/target/test-classes:/home/dnclab-jinwon/workspace/RSU/rsu/./ws-test/target/classes:/home/dnclab-jinwon/.m2/repository/junit/junit/4.11/junit-4.11.jar:/home/dnclab-jinwon/.m2/repository/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar:/home/dnclab-jinwon/.m2/repository/com/squareup/retrofit2/retrofit/2.6.1/retrofit-2.6.1.jar:/home/dnclab-jinwon/.m2/repository/com/squareup/okhttp3/okhttp/3.12.0/okhttp-3.12.0.jar:/home/dnclab-jinwon/.m2/repository/com/squareup/okio/okio/1.15.0/okio-1.15.0.jar:/home/dnclab-jinwon/.m2/repository/com/squareup/retrofit2/converter-scalars/2.6.1/converter-scalars-2.6.1.jar:/home/dnclab-jinwon/.m2/repository/com/googlecode/json-simple/json-simple/1.1/json-simple-1.1.jar:/home/dnclab-jinwon/.m2/repository/org/json/json/20180130/json-20180130.jar:/home/dnclab-jinwon/.m2/repository/com/neovisionaries/nv-websocket-client/2.9/nv-websocket-client-2.9.jar:"/>
     <property name="sun.cpu.endian" value="little"/>
     <property name="user.home" value="/home/dnclab-jinwon"/>
@@ -30,13 +30,13 @@
     <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
     <property name="java.specification.name" value="Java Platform API Specification"/>
     <property name="java.awt.graphicsenv" value="sun.awt.X11GraphicsEnvironment"/>
-    <property name="surefire.real.class.path" value="/home/dnclab-jinwon/workspace/RSU/rsu/./ws-test/target/surefire/surefirebooter3018017862467279377.jar"/>
+    <property name="surefire.real.class.path" value="/home/dnclab-jinwon/workspace/RSU/rsu/./ws-test/target/surefire/surefirebooter1798851869406782860.jar"/>
     <property name="sun.boot.class.path" value="/usr/local/java/jdk1.8.0_251/jre/lib/resources.jar:/usr/local/java/jdk1.8.0_251/jre/lib/rt.jar:/usr/local/java/jdk1.8.0_251/jre/lib/sunrsasign.jar:/usr/local/java/jdk1.8.0_251/jre/lib/jsse.jar:/usr/local/java/jdk1.8.0_251/jre/lib/jce.jar:/usr/local/java/jdk1.8.0_251/jre/lib/charsets.jar:/usr/local/java/jdk1.8.0_251/jre/lib/jfr.jar:/usr/local/java/jdk1.8.0_251/jre/classes"/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="java.runtime.version" value="1.8.0_251-b08"/>
     <property name="user.name" value="dnclab-jinwon"/>
     <property name="path.separator" value=":"/>
-    <property name="os.version" value="4.15.0-1093-oem"/>
+    <property name="os.version" value="4.15.0-1101-oem"/>
     <property name="java.endorsed.dirs" value="/usr/local/java/jdk1.8.0_251/jre/lib/endorsed"/>
     <property name="java.runtime.name" value="Java(TM) SE Runtime Environment"/>
     <property name="file.encoding" value="UTF-8"/>

@@ -80,8 +80,8 @@ public class Message
                     .put("vehicleLisense", "")
                     .put("vehicleType", "")
                     .put("status", new JSONArray())
-                    .put("latitude", 0)
-                    .put("longitude", 0)
+                    .put("latitude", "37.5846952")
+                    .put("longitude", "127.0273503")
                     .put("data", new JSONArray());
         } catch (JSONException e) {
             e.printStackTrace();
@@ -285,8 +285,8 @@ public class Message
             _format
                     .put("localTime", 0)
                     .put("data", new JSONArray())
-                    .put("latitude", 0)
-                    .put("longitude", 0);
+                    .put("latitude", "37.5846952")
+                    .put("longitude", "127.0273503");
         } catch (JSONException e) {
 
         }

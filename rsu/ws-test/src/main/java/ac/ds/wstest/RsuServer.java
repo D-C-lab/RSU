@@ -89,13 +89,15 @@ public String ServerContainer(String message) throws Exception{
             
          
     if (abnormals.isEmpty()) {
-        return "o" + "[" + count + "]" + " " + "vehicleID: "+ data.get(data.size()-1).toString();
+//        return "o" + "[" + count + "]" + " " + "vehicleID: "+ data.get(data.size()-1).toString();
+        return "o" + " " + "vehicleID: "+ data.get(data.size()-1).toString();
     }
 
 
-    Message rst = mMsg.setType(Message.MsgType.abnormal).setVehicleInfo(carNum,"lisense",Message.VehicleType.Truck).setTimeToNow().clone(); // update
+    Message rst = mMsg.setType(Message.MsgType.abnormal).setVehicleInfo("id", carNum, Message.VehicleType.Truck).setTimeToNow().clone(); // update
 
-    return "a" + "[" + count + "]" + rst.toString();
+//    return "a" + "[" + count + "]" + rst.toString();
+    return "a" + rst.toString();
 }  
 
 

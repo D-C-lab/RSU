@@ -29,7 +29,7 @@ public class RSU {
         }
 
         String attURL = String.format("ws://%s:%s/rsu", attHost, attPort);
-        String rmtURL = String.format("http://%s:%s", rmtHost, rmtPort);
+        String rmtURL = String.format("http://%s:%s/api/IITP/setMobileJSON", rmtHost, rmtPort);
 
          WS ws = new WS(attURL, rmtURL);
 
